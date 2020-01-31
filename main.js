@@ -78,15 +78,20 @@ function Archer(game, spritesheet, X, Y) {
     // scale 0.125
     // this.moveAnimation = new MyAnimation(AM.getAsset("./img/Archer_Walk.png"), 0, 0, 900, 900, 0.1, 24, true, false);
     this.moveAnimation = new Animation(spritesheet, 900, 900, 12, 0.15, 24, true, 0.125);
+    this.reverseAnimation = new Animation(AM.getAsset("./img/Reverse_Archer.png"), 900, 900, 12, 0.15, 24, true, 0.125);
     this.attackAnimation = new MyAnimation(spritesheet, 0, 1800, 900, 900, 0.2, 8, true, false);
+    this.airAnimation = new MyAnimation(AM.getAsset("./img/Reverse_Archer.png"), 0, 1800, 900, 900, 0.2, 9, true, false);
     this.idleAnimation = new Animation(AM.getAsset("./img/Archer_Idle.png"), 900, 900, 12, 0.15, 18, true, 0.125);
     this.deathAnimation = new MyAnimation(spritesheet, 0, 2700, 900, 900, 0.2, 16, true, false);
     this.jumpAnimation = new MyAnimation(AM.getAsset("./img/Archer_Jump.png"), 0, 0, 900, 900, 0.2, 5, true, false);
-    this.kickAnimation = new MyAnimation(AM.getAsset("./img/Archer_Jump.png"), 0, 2700, 900, 900, 0.2, 6, true, false);
+    this.slideAnimation = new MyAnimation(AM.getAsset("./img/Archer_Jump.png"), 0, 2700, 900, 900, 0.2, 6, true, false);
+    this.counter = 0;
     this.idle = false;
     this.moving = true;
+    this.reverse = false;
+    this.airshot = false;
     this.attacking = false;
-    this.kick = false;
+    this.slide = false;
     this.death = false;
     this.jump = false;
     this.hp = 20;
@@ -106,11 +111,30 @@ Archer.prototype.constructor = Archer;
 
 Archer.prototype.update = function () {
     if (this.moving) {
+        
         this.x += this.game.clockTick * this.speed;
         if (this.x > 700) {
             this.moving = false;
-            this.attacking = true;
+            
+            this.counter++;
+            if (this.counter === 1) {
+                this.reverse = true;
+            } else if (this.counter > 1) {
+                this.attacking = true;
+            }
+
+            // this.attacking = true;
         }
+
+    } else if (this.reverse) {
+        this.x -= this.game.clockTick * this.speed;
+        if (this.x < 350) {
+            this.reverse = false;
+            this.airShot = true;
+            
+
+        }
+
 
     }
 
@@ -119,18 +143,39 @@ Archer.prototype.update = function () {
 
 Archer.prototype.draw = function () {
     if (this.moving) {
-
-
         this.moveAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y);
 
+    } else if (this.reverse) {
+        this.reverseAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y);
 
+    } else if (this.airShot) {
+        if (this.airAnimation.currentFrame() === 4 && !this.arrowFire) {
+
+            this.arrowFire = true;
+            this.quiver--;
+            gameEngine.addEntity(new Arrow(gameEngine, AM.getAsset("./img/Reverse_Arrow.png"), this.x + (185 * 0.125), this.y + (500 * 0.125), true));
+
+        }
+        this.airAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y, 0.125);
+
+        if (this.airAnimation.currentFrame() === 8) {
+            this.arrowFire = false;
+        }
+
+
+        if (this.quiver === 0) {
+            this.airShot = false;
+            this.quiver = 3;
+            this.arrowFire = false;
+            this.moving = true;
+        }
 
     } else if (this.attacking) {
         if (this.attackAnimation.currentFrame() === 4 && !this.arrowFire) {
 
             this.arrowFire = true;
             this.quiver--;
-            gameEngine.addEntity(new Arrow(gameEngine, AM.getAsset("./img/Arrow.png"), this.x + (390 * 0.125), this.y + (530 * 0.125)));
+            gameEngine.addEntity(new Arrow(gameEngine, AM.getAsset("./img/Arrow.png"), this.x + (390 * 0.125), this.y + (530 * 0.125), false));
 
         }
         this.attackAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y, 0.125);
@@ -143,23 +188,20 @@ Archer.prototype.draw = function () {
         if (this.quiver === 0) {
             this.attacking = false;
             this.idle = true;
-            this.animationEnd = false;
         }
 
     } else if (this.idle) {
 
         this.idleAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y, 0.125);
-        if (this.idleAnimation.currentFrame() === 11 && !this.animationEnd) {
-            this.animationEnd = false;
+        if (this.idleAnimation.currentFrame() === 17) {
             this.idle = false;
-            this.kick = true;
+            this.slide = true;
         }
 
-    } else if (this.kick) {
-        this.kickAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y, 0.125);
-        if (this.kickAnimation.currentFrame() === 5 && !this.animationEnd) {
-            this.animationEnd = false;
-            this.kick = false;
+    } else if (this.slide) {
+        this.slideAnimation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y, 0.125);
+        if (this.slideAnimation.currentFrame() === 5) {
+            this.slide = false;
             this.jump = true;
         }
 
@@ -445,10 +487,11 @@ Background.prototype.update = function () {
 };
 
 // inheritance 
-function Arrow(game, spritesheet, X, Y) {
+function Arrow(game, spritesheet, X, Y, reverse) {
     this.animation = new Animation(spritesheet, 320, 128, 1, 0.05, 1, true, 0.125);
     this.speed = 100;
     this.ctx = game.ctx;
+    this.reverse = reverse;
     Entity.call(this, game, X, Y);
 }
 
@@ -456,16 +499,26 @@ Arrow.prototype = new Entity();
 Arrow.prototype.constructor = Arrow;
 
 Arrow.prototype.update = function () {
-    if (this.x < 1135 ) {
-        this.x += this.game.clockTick * this.speed;
-        Entity.prototype.update.call(this);
-    }
 
+    if (!this.reverse) {
+        if (this.x < 1135) {
+            this.x += this.game.clockTick * this.speed;
+            
+        }
+    } else {
+        if (this.x > 0) {
+            this.x -= this.game.clockTick * this.speed;
+            
+        }
+
+        
+    }
+    Entity.prototype.update.call(this);
 
 }
 
 Arrow.prototype.draw = function () {
-    if (this.x < 1135) {
+    if ((this.x < 1135 && !this.reverse) || (this.x >= 0 && this.reverse)) {
         
         this.animation.drawFrame(this.game.clockTick, this.ctx, this.x, this.y);
         Entity.prototype.draw.call(this);
@@ -591,11 +644,13 @@ UnitsControl.prototype.draw = function () {
 }
 
 AM.queueDownload("./img/Arrow.png");
+AM.queueDownload("./img/Reverse_Arrow.png");
 AM.queueDownload("./img/Archer_1.png");
 AM.queueDownload("./img/Archer_Idle.png");
 AM.queueDownload("./img/Archer_Walk.png");
 AM.queueDownload("./img/Archer_Jump.png");
 AM.queueDownload("./img/Archer_Kick.png");
+AM.queueDownload("./img/Reverse_Archer.png");
 AM.queueDownload("./img/Fireball.png");
 AM.queueDownload("./img/Fireball_icon.png");
 AM.queueDownload("./img/Knight_icon.png");
